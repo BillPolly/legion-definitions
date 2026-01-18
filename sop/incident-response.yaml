@@ -1,0 +1,268 @@
+name: incident-response-sop
+type: sop
+version: "1.0.0"
+description: Standard procedure for responding to security incidents
+
+search:
+  keywords: [incident response, containment, eradication, recovery, NIST]
+  capabilities: [threat containment, forensics, remediation, incident handling]
+
+# Applicability - when this SOP should be used
+applicability:
+  triggerTypes:
+    - Incident
+    - Alert
+  conditions:
+    - severity: [high, critical]
+    - status: [new, triaging]
+
+# Parameters that must be provided at instantiation
+parameters:
+  incident:
+    type: Incident
+    required: true
+    description: The incident to respond to
+
+  analyst:
+    type: string
+    required: true
+    description: Assigned analyst username
+
+  escalationThreshold:
+    type: int
+    default: 30
+    description: Minutes before auto-escalation
+
+  containmentStrategy:
+    type: string
+    enum: [isolate, quarantine, monitor]
+    default: isolate
+    description: Initial containment approach
+
+  notifyStakeholders:
+    type: boolean
+    default: true
+    description: Whether to send stakeholder notifications
+
+# The procedure as a sequence of phases
+phases:
+  - id: triage
+    name: Initial Triage
+    description: Assess the incident scope and severity
+    steps:
+      - action: gather_context
+        description: Collect initial incident data from available sources
+        inputs:
+          incident: $incident
+        outputs:
+          - affectedAssets
+          - threatIndicators
+          - initialTimeline
+
+      - action: assess_severity
+        description: Validate and potentially update the incident severity level
+        inputs:
+          indicators: $threatIndicators
+          assets: $affectedAssets
+        outputs:
+          - confirmedSeverity
+          - impactAssessment
+          - urgencyScore
+
+      - action: notify_stakeholders
+        description: Send initial notifications to stakeholders
+        condition: $notifyStakeholders == true
+        inputs:
+          incident: $incident
+          analyst: $analyst
+          severity: $confirmedSeverity
+        outputs:
+          - notificationsSent
+
+  - id: containment
+    name: Containment
+    description: Prevent further damage by containing the threat
+    steps:
+      - action: plan_containment
+        description: Develop containment plan based on threat type
+        inputs:
+          assets: $affectedAssets
+          indicators: $threatIndicators
+          strategy: $containmentStrategy
+        outputs:
+          - containmentPlan
+          - isolationTargets
+
+      - action: execute_containment
+        description: Apply containment measures to affected assets
+        inputs:
+          plan: $containmentPlan
+          targets: $isolationTargets
+        outputs:
+          - containmentActions
+          - containmentResult
+
+      - action: verify_containment
+        description: Confirm containment measures are effective
+        inputs:
+          assets: $affectedAssets
+          actions: $containmentActions
+        outputs:
+          - containmentVerified
+          - remainingRisk
+
+  - id: eradication
+    name: Eradication
+    description: Remove the threat from the environment
+    requires:
+      - containment.containmentVerified == true
+    steps:
+      - action: identify_artifacts
+        description: Find all malicious artifacts across affected systems
+        inputs:
+          indicators: $threatIndicators
+          assets: $affectedAssets
+        outputs:
+          - maliciousArtifacts
+          - persistenceMechanisms
+
+      - action: remove_artifacts
+        description: Remove or neutralize malicious artifacts
+        inputs:
+          artifacts: $maliciousArtifacts
+          persistence: $persistenceMechanisms
+        outputs:
+          - removedArtifacts
+          - remediationReport
+
+      - action: verify_eradication
+        description: Confirm all traces of threat have been removed
+        inputs:
+          assets: $affectedAssets
+          removed: $removedArtifacts
+        outputs:
+          - eradicationVerified
+          - residualIndicators
+
+  - id: recovery
+    name: Recovery
+    description: Restore normal operations
+    requires:
+      - eradication.eradicationVerified == true
+    steps:
+      - action: plan_recovery
+        description: Develop recovery plan for affected services
+        inputs:
+          assets: $affectedAssets
+          containmentActions: $containmentActions
+        outputs:
+          - recoveryPlan
+          - recoveryOrder
+
+      - action: restore_services
+        description: Restore services to normal operation
+        inputs:
+          plan: $recoveryPlan
+          order: $recoveryOrder
+        outputs:
+          - restoredServices
+          - restorationStatus
+
+      - action: verify_restoration
+        description: Confirm services are operating normally
+        inputs:
+          services: $restoredServices
+        outputs:
+          - servicesRestored
+          - healthChecks
+
+      - action: monitor_recovery
+        description: Enhanced monitoring post-recovery
+        inputs:
+          assets: $affectedAssets
+          indicators: $threatIndicators
+        outputs:
+          - monitoringStatus
+          - alertThresholds
+
+  - id: lessons_learned
+    name: Lessons Learned
+    description: Post-incident review and documentation
+    steps:
+      - action: collect_timeline
+        description: Build comprehensive incident timeline
+        inputs:
+          incident: $incident
+          phases: $executionHistory
+        outputs:
+          - incidentTimeline
+          - keyEvents
+
+      - action: identify_improvements
+        description: Identify process and technical improvements
+        inputs:
+          timeline: $incidentTimeline
+          containmentPlan: $containmentPlan
+          recoveryPlan: $recoveryPlan
+        outputs:
+          - improvements
+          - recommendations
+
+      - action: generate_report
+        description: Generate final incident report
+        inputs:
+          incident: $incident
+          timeline: $incidentTimeline
+          improvements: $improvements
+          outcomes:
+            containmentResult: $containmentResult
+            eradicationVerified: $eradicationVerified
+            servicesRestored: $servicesRestored
+        outputs:
+          - incidentReport
+
+      - action: update_knowledge_base
+        description: Update runbooks and knowledge base
+        inputs:
+          report: $incidentReport
+          recommendations: $recommendations
+        outputs:
+          - knowledgeUpdates
+
+# Escalation rules
+escalation:
+  - condition: phase.triage.duration > $escalationThreshold
+    action: notify
+    targets: [soc-manager]
+    message: "Incident {{$incident.name}} triage exceeding {{$escalationThreshold}} minute threshold"
+
+  - condition: phase.containment.containmentVerified == false
+    action: escalate
+    targets: [incident-commander]
+    severity: critical
+    message: "Containment verification failed for {{$incident.name}}"
+
+  - condition: confirmedSeverity == critical
+    action: notify
+    targets: [ciso, security-team]
+    message: "Critical incident confirmed: {{$incident.name}}"
+
+  - condition: phase.recovery.servicesRestored == false
+    action: escalate
+    targets: [it-operations, incident-commander]
+    message: "Service restoration failed for {{$incident.name}}"
+
+# Outputs produced when SOP completes
+outputs:
+  containmentResult:
+    type: object
+    description: Results of containment phase
+  incidentReport:
+    type: object
+    description: Final incident report document
+  lessonsLearned:
+    type: array
+    description: List of lessons learned
+  recommendations:
+    type: array
+    description: Improvement recommendations

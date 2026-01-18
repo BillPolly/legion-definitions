@@ -1,0 +1,257 @@
+name: sop-ontology
+type: ontology
+version: "1.0.0"
+description: Standard Operating Procedure ontology types
+
+imports:
+  - foundation
+  - foundation-relations
+  - soc-ontology
+
+search:
+  keywords: [SOP, procedure, workflow, playbook, runbook, incident response]
+  capabilities: [procedure tracking, workflow management, task automation]
+
+concepts:
+  # SOP Template - the reusable procedure definition
+  SOPTemplate:
+    kind: entity
+    parent: DirectiveArtifact
+    description: A reusable standard operating procedure template that can be instantiated with parameters.
+    attributes:
+      version:
+        type: string
+        description: Version of the SOP template
+      parameterSchema:
+        type: object
+        description: JSON Schema defining required and optional parameters
+      phaseCount:
+        type: int
+        description: Number of phases in the procedure
+      applicabilityRules:
+        type: object
+        description: Rules defining when this SOP should be used
+      searchKeywords:
+        type: array
+        description: Keywords for semantic search
+
+  # SOP Instance - a running instance of an SOP
+  SOPInstance:
+    kind: entity
+    parent: Process
+    description: A running instance of an SOP with bound parameters and execution state.
+    attributes:
+      status:
+        type: string
+        enum: [created, in_progress, paused, completed, failed, cancelled]
+        description: Current execution status
+      currentPhase:
+        type: string
+        description: ID of the phase currently being executed
+      currentStep:
+        type: string
+        description: Name of the step currently being executed
+      boundParameters:
+        type: object
+        description: Parameters bound at instantiation
+      startedAt:
+        type: datetime
+        description: When execution began
+      completedAt:
+        type: datetime
+        description: When execution completed or failed
+      lastError:
+        type: string
+        description: Last error message if failed
+
+  # SOP Execution - historical record
+  SOPExecution:
+    kind: entity
+    parent: Process
+    description: Historical record of a completed SOP execution for audit and learning.
+    attributes:
+      duration:
+        type: int
+        description: Total execution duration in milliseconds
+      outcome:
+        type: string
+        enum: [success, partial, failure]
+        description: Execution outcome
+      phaseResults:
+        type: object
+        description: Results from each phase
+      lessonsLearned:
+        type: array
+        description: Lessons captured during execution
+
+  # SOP Phase - a major section of an SOP
+  SOPPhase:
+    kind: entity
+    parent: Process
+    description: A distinct phase or stage within an SOP procedure.
+    attributes:
+      phaseName:
+        type: string
+        description: Human-readable phase name
+      phaseOrder:
+        type: int
+        description: Order of this phase in the SOP
+      prerequisiteCondition:
+        type: string
+        description: Condition that must be true to enter this phase
+      stepCount:
+        type: int
+        description: Number of steps in this phase
+
+  # SOP Step - a single action within a phase
+  SOPStep:
+    kind: entity
+    parent: Process
+    description: A single action or task within an SOP phase.
+    attributes:
+      actionName:
+        type: string
+        required: true
+        description: Name of the action to execute
+      actionDescription:
+        type: string
+        description: Human-readable description of what this step does
+      inputParameters:
+        type: object
+        description: Input parameters for the action
+      outputVariables:
+        type: array
+        description: Variables produced by this step
+      condition:
+        type: string
+        description: Condition for executing this step
+
+  # Escalation Rule - defines when to escalate
+  EscalationRule:
+    kind: entity
+    parent: DirectiveArtifact
+    description: A rule defining when and how to escalate during SOP execution.
+    attributes:
+      triggerCondition:
+        type: string
+        required: true
+        description: Condition that triggers escalation
+      escalationAction:
+        type: string
+        enum: [notify, escalate, pause, abort]
+        description: Type of escalation action
+      targets:
+        type: array
+        description: Who to notify or escalate to
+      message:
+        type: string
+        description: Escalation message template
+
+relations:
+  # SOP Template relations
+  INSTANCE_OF_SOP:
+    description: Instance was created from this SOP template.
+    domain: SOPInstance
+    range: SOPTemplate
+    inverse: HAS_INSTANCE
+
+  HAS_INSTANCE:
+    description: SOP template has this running instance.
+    domain: SOPTemplate
+    range: SOPInstance
+    inverse: INSTANCE_OF_SOP
+
+  # SOP Instance to Incident
+  TRIGGERED_BY_INCIDENT:
+    description: SOP was triggered by an incident.
+    domain: SOPInstance
+    range: Incident
+    inverse: TRIGGERED_SOP
+
+  TRIGGERED_SOP:
+    description: Incident triggered this SOP instance.
+    domain: Incident
+    range: SOPInstance
+    inverse: TRIGGERED_BY_INCIDENT
+
+  # SOP Instance to Person
+  EXECUTED_BY:
+    description: SOP was executed by an analyst.
+    domain: SOPInstance
+    range: Person
+    inverse: EXECUTED_SOP
+
+  EXECUTED_SOP:
+    description: Person executed this SOP instance.
+    domain: Person
+    range: SOPInstance
+    inverse: EXECUTED_BY
+
+  # Phase relations
+  HAS_PHASE:
+    description: SOP template has this phase.
+    domain: SOPTemplate
+    range: SOPPhase
+    inverse: PHASE_OF
+
+  PHASE_OF:
+    description: Phase belongs to this SOP template.
+    domain: SOPPhase
+    range: SOPTemplate
+    inverse: HAS_PHASE
+
+  FOLLOWS_PHASE:
+    description: This phase follows another phase in sequence.
+    domain: SOPPhase
+    range: SOPPhase
+    inverse: PRECEDES_PHASE
+
+  PRECEDES_PHASE:
+    description: This phase precedes another phase in sequence.
+    domain: SOPPhase
+    range: SOPPhase
+    inverse: FOLLOWS_PHASE
+
+  # Step relations
+  HAS_STEP:
+    description: Phase has this step.
+    domain: SOPPhase
+    range: SOPStep
+    inverse: STEP_OF
+
+  STEP_OF:
+    description: Step belongs to this phase.
+    domain: SOPStep
+    range: SOPPhase
+    inverse: HAS_STEP
+
+  # Escalation relations
+  HAS_ESCALATION_RULE:
+    description: SOP template has this escalation rule.
+    domain: SOPTemplate
+    range: EscalationRule
+    inverse: ESCALATION_FOR
+
+  ESCALATION_FOR:
+    description: Escalation rule is for this SOP template.
+    domain: EscalationRule
+    range: SOPTemplate
+    inverse: HAS_ESCALATION_RULE
+
+  # Execution history
+  HAS_EXECUTION:
+    description: SOP template has this historical execution.
+    domain: SOPTemplate
+    range: SOPExecution
+    inverse: EXECUTION_OF
+
+  EXECUTION_OF:
+    description: Execution is of this SOP template.
+    domain: SOPExecution
+    range: SOPTemplate
+    inverse: HAS_EXECUTION
+
+  PRODUCED_BY_INSTANCE:
+    description: Execution was produced by this instance.
+    domain: SOPExecution
+    range: SOPInstance
