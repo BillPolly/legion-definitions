@@ -1,0 +1,268 @@
+name: threat-radar
+type: app-component
+version: "1.0.0"
+description: Arc reactor style threat level display with stats grid
+
+# Parameters this component accepts
+params:
+  refreshInterval:
+    type: number
+    default: 30000
+    description: Interval in ms to refresh threat data
+  showStats:
+    type: boolean
+    default: true
+    description: Whether to show the stats grid below the radar
+
+# Events this component emits
+exports:
+  - threat-level-changed
+  - stat-clicked
+
+# Component-scoped styles
+styles: |
+  .threat-radar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+  }
+
+  .arc-reactor {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--jarvis-cyan, #00d4ff) 0%, transparent 70%);
+    box-shadow: 0 0 40px var(--jarvis-cyan, #00d4ff);
+    animation: pulse 2s infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .threat-level {
+    font-size: 36px;
+    font-weight: bold;
+    color: var(--jarvis-dark, #0a0a12);
+    text-shadow: 0 0 10px var(--jarvis-cyan, #00d4ff);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+    width: 100%;
+  }
+
+  .stat-item {
+    text-align: center;
+    padding: 8px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+
+  .stat-item:hover {
+    background: rgba(0, 212, 255, 0.2);
+  }
+
+  .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--jarvis-cyan, #00d4ff);
+  }
+
+  .stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+  }
+
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 150px;
+    color: var(--jarvis-cyan, #00d4ff);
+  }
+
+  .panel-header {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--jarvis-cyan, #00d4ff);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-header::before {
+    content: '//';
+    opacity: 0.5;
+  }
+
+# Component state
+state:
+  loading: true
+  threatLevel: 0
+  counts:
+    assets: 0
+    threats: 0
+    incidents: 0
+    activeThreats: 0
+  showStats: true
+
+# Reducers - handles both server messages and UI actions
+reducers:
+  dashboard-summary:
+    operator: sequence
+    operations:
+      - operator: log
+        message: "Received dashboard summary"
+      - operator: set
+        field: threatLevel
+        value: "{{message.payload.threatLevel}}"
+      - operator: set
+        field: counts
+        value: "{{message.payload.counts}}"
+      - operator: set
+        field: loading
+        value: false
+      - operator: emit
+        event: threat-level-changed
+        data: "{{message.payload.threatLevel}}"
+
+  server-ready:
+    operator: sequence
+    operations:
+      - operator: log
+        message: "Server ready, requesting dashboard summary"
+      - operator: backend-call
+        operation: get-dashboard-summary
+
+  channel_closed:
+    operator: set
+    field: loading
+    value: true
+
+  REFRESH:
+    operator: backend-call
+    operation: get-dashboard-summary
+
+  STAT_CLICKED:
+    operator: emit
+    event: stat-clicked
+    data: "{{message.stat}}"
+
+# UI Structure
+structure:
+  type: element
+  tag: div
+  class: threat-radar
+  children:
+    - type: element
+      tag: div
+      class: panel-header
+      textContent: Threat Level
+
+    - type: conditional
+      condition: '{{loading}}'
+      then:
+        type: element
+        tag: div
+        class: loading
+        textContent: Connecting...
+      else:
+        type: element
+        tag: div
+        children:
+          - type: element
+            tag: div
+            class: arc-reactor
+            children:
+              - type: element
+                tag: span
+                class: threat-level
+                textContent: '{{threatLevel}}'
+
+          - type: conditional
+            condition: '{{showStats}}'
+            then:
+              type: element
+              tag: div
+              class: stats-grid
+              children:
+                - type: element
+                  tag: div
+                  class: stat-item
+                  attributes:
+                    onclick: STAT_CLICKED
+                    data-stat: assets
+                  children:
+                    - type: element
+                      tag: div
+                      class: stat-value
+                      textContent: '{{counts.assets}}'
+                    - type: element
+                      tag: div
+                      class: stat-label
+                      textContent: Assets
+
+                - type: element
+                  tag: div
+                  class: stat-item
+                  attributes:
+                    onclick: STAT_CLICKED
+                    data-stat: threats
+                  children:
+                    - type: element
+                      tag: div
+                      class: stat-value
+                      textContent: '{{counts.threats}}'
+                    - type: element
+                      tag: div
+                      class: stat-label
+                      textContent: Threats
+
+                - type: element
+                  tag: div
+                  class: stat-item
+                  attributes:
+                    onclick: STAT_CLICKED
+                    data-stat: incidents
+                  children:
+                    - type: element
+                      tag: div
+                      class: stat-value
+                      textContent: '{{counts.incidents}}'
+                    - type: element
+                      tag: div
+                      class: stat-label
+                      textContent: Incidents
+
+                - type: element
+                  tag: div
+                  class: stat-item
+                  attributes:
+                    onclick: STAT_CLICKED
+                    data-stat: active
+                  children:
+                    - type: element
+                      tag: div
+                      class: stat-value
+                      textContent: '{{counts.activeThreats}}'
+                    - type: element
+                      tag: div
+                      class: stat-label
+                      textContent: Active
