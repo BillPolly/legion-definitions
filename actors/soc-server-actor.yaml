@@ -1,0 +1,582 @@
+# SOC Server Actor Definition
+#
+# Fully declarative server definition:
+# - Protocol (messages)
+# - Schema (DataScript attributes)
+# - Concepts (business rule constraints)
+# - Handlers (message processing)
+# - Seed data (initial state)
+
+type: actor
+name: soc-server-actor
+
+# =============================================================================
+# DATA STORE CONFIGURATION
+# =============================================================================
+dataStore:
+  type: persistent
+  database: soc_dashboard
+  collection: entities
+
+# =============================================================================
+# SCHEMA - DataScript attribute definitions
+# =============================================================================
+schema:
+  # Asset attributes
+  :asset/hostname:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+    :db/unique: :db.unique/identity
+  :asset/ip:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+    :db/unique: :db.unique/identity
+  :asset/type:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :asset/criticalityLevel:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :asset/os:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :asset/department:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+
+  # Vulnerability attributes
+  :vulnerability/cveId:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+    :db/unique: :db.unique/identity
+  :vulnerability/severity:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/number
+  :vulnerability/description:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :vulnerability/affectedAssets:
+    :db/cardinality: :db.cardinality/many
+    :db/valueType: :db.type/ref
+  :vulnerability/patchAvailable:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/boolean
+
+  # Threat attributes
+  :threat/name:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :threat/type:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :threat/severity:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/number
+  :threat/status:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :threat/exploitsVulnerability:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/ref
+  :threat/source:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+
+  # Incident attributes
+  :incident/title:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :incident/asset:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/ref
+  :incident/threat:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/ref
+  :incident/status:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :incident/severity:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/number
+  :incident/assignee:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/string
+  :incident/timestamp:
+    :db/cardinality: :db.cardinality/one
+    :db/valueType: :db.type/instant
+  :incident/relatedIncidents:
+    :db/cardinality: :db.cardinality/many
+    :db/valueType: :db.type/ref
+
+# =============================================================================
+# CONCEPTS - Business rule constraints (Ross constraints)
+# =============================================================================
+concepts:
+  - uri: Asset
+    kind: entity
+    description: Infrastructure component being monitored
+    constraints:
+      population:
+        mandatory:
+          - :asset/hostname
+          - :asset/ip
+          - :asset/type
+          - :asset/criticalityLevel
+          - :asset/department
+        unique:
+          - :asset/hostname
+          - :asset/ip
+      value:
+        :asset/type:
+          enum: [server, workstation, network-device, iot, container]
+        :asset/criticalityLevel:
+          enum: [critical, high, medium, low]
+        :asset/os:
+          enum: [linux, windows, macos, firmware, container-os]
+        :asset/ip:
+          pattern: "^((25[0-5]|(2[0-4]|1\\d|[1-9]|)\\d)\\.?\\b){4}$"
+    defaults:
+      :asset/os: linux
+      :asset/criticalityLevel: medium
+
+  - uri: Vulnerability
+    kind: entity
+    description: Security vulnerability tracked by CVE
+    constraints:
+      population:
+        mandatory:
+          - :vulnerability/cveId
+          - :vulnerability/severity
+          - :vulnerability/description
+        unique:
+          - :vulnerability/cveId
+      value:
+        :vulnerability/cveId:
+          pattern: "^CVE-\\d{4}-\\d{4,}$"
+        :vulnerability/severity:
+          range: [1, 10]
+    defaults:
+      :vulnerability/patchAvailable: false
+
+  - uri: Threat
+    kind: entity
+    description: Active security threat
+    constraints:
+      population:
+        mandatory:
+          - :threat/name
+          - :threat/type
+          - :threat/severity
+          - :threat/status
+      value:
+        :threat/type:
+          enum: [malware, ransomware, phishing, ddos, apt, exploit]
+        :threat/severity:
+          range: [1, 10]
+        :threat/status:
+          enum: [active, contained, remediated, monitoring]
+    defaults:
+      :threat/status: active
+
+  - uri: Incident
+    kind: entity
+    description: Security incident requiring investigation
+    constraints:
+      population:
+        mandatory:
+          - :incident/title
+          - :incident/asset
+          - :incident/threat
+          - :incident/status
+          - :incident/timestamp
+      value:
+        :incident/status:
+          enum: [new, investigating, contained, resolved, false-positive]
+        :incident/severity:
+          range: [1, 10]
+      ring:
+        :incident/relatedIncidents:
+          acyclic: true
+          irreflexive: true
+    defaults:
+      :incident/status: new
+
+# =============================================================================
+# SEED DATA - Initial entities
+# =============================================================================
+seedData:
+  # Assets
+  - :db/id: asset-1
+    __type__: Asset
+    :asset/hostname: web-prod-01
+    :asset/ip: 10.0.1.10
+    :asset/type: server
+    :asset/criticalityLevel: critical
+    :asset/os: linux
+    :asset/department: Engineering
+
+  - :db/id: asset-2
+    __type__: Asset
+    :asset/hostname: db-master-01
+    :asset/ip: 10.0.2.20
+    :asset/type: server
+    :asset/criticalityLevel: critical
+    :asset/os: linux
+    :asset/department: Engineering
+
+  - :db/id: asset-3
+    __type__: Asset
+    :asset/hostname: firewall-edge-01
+    :asset/ip: 10.0.0.1
+    :asset/type: network-device
+    :asset/criticalityLevel: critical
+    :asset/os: firmware
+    :asset/department: Security
+
+  - :db/id: asset-4
+    __type__: Asset
+    :asset/hostname: workstation-dev-03
+    :asset/ip: 10.0.10.103
+    :asset/type: workstation
+    :asset/criticalityLevel: medium
+    :asset/os: macos
+    :asset/department: Engineering
+
+  - :db/id: asset-5
+    __type__: Asset
+    :asset/hostname: sensor-iot-042
+    :asset/ip: 10.0.50.42
+    :asset/type: iot
+    :asset/criticalityLevel: low
+    :asset/os: firmware
+    :asset/department: Operations
+
+  - :db/id: asset-6
+    __type__: Asset
+    :asset/hostname: container-k8s-api
+    :asset/ip: 10.0.100.5
+    :asset/type: container
+    :asset/criticalityLevel: high
+    :asset/os: container-os
+    :asset/department: Engineering
+
+  # Vulnerabilities
+  - :db/id: vuln-1
+    __type__: Vulnerability
+    :vulnerability/cveId: CVE-2024-0001
+    :vulnerability/severity: 9.8
+    :vulnerability/description: Remote code execution in Apache Log4j logging library
+    :vulnerability/affectedAssets: [asset-1, asset-2]
+    :vulnerability/patchAvailable: true
+
+  - :db/id: vuln-2
+    __type__: Vulnerability
+    :vulnerability/cveId: CVE-2024-0042
+    :vulnerability/severity: 7.5
+    :vulnerability/description: SQL injection in authentication module
+    :vulnerability/affectedAssets: [asset-2]
+    :vulnerability/patchAvailable: false
+
+  - :db/id: vuln-3
+    __type__: Vulnerability
+    :vulnerability/cveId: CVE-2024-1337
+    :vulnerability/severity: 8.1
+    :vulnerability/description: Privilege escalation via kernel exploit
+    :vulnerability/affectedAssets: [asset-1, asset-4]
+    :vulnerability/patchAvailable: false
+
+  # Threats
+  - :db/id: threat-1
+    __type__: Threat
+    :threat/name: Cobalt Strike Beacon
+    :threat/type: apt
+    :threat/severity: 9
+    :threat/status: active
+    :threat/exploitsVulnerability: vuln-1
+    :threat/source: APT29 (Cozy Bear)
+
+  - :db/id: threat-2
+    __type__: Threat
+    :threat/name: REvil Ransomware
+    :threat/type: ransomware
+    :threat/severity: 10
+    :threat/status: contained
+    :threat/exploitsVulnerability: vuln-3
+    :threat/source: Cybercrime Group
+
+  - :db/id: threat-3
+    __type__: Threat
+    :threat/name: Mirai Botnet Variant
+    :threat/type: malware
+    :threat/severity: 6
+    :threat/status: monitoring
+    :threat/source: Unknown Actor
+
+  - :db/id: threat-4
+    __type__: Threat
+    :threat/name: Phishing Campaign X
+    :threat/type: phishing
+    :threat/severity: 5
+    :threat/status: remediated
+    :threat/source: Cybercrime Group
+
+  # Incidents
+  - :db/id: incident-1
+    __type__: Incident
+    :incident/title: Cobalt Strike beacon detected on web-prod-01
+    :incident/asset: asset-1
+    :incident/threat: threat-1
+    :incident/status: investigating
+    :incident/severity: 9
+    :incident/assignee: Alice Chen
+    :incident/timestamp: "2024-01-15T08:30:00Z"
+    :incident/relatedIncidents: []
+
+  - :db/id: incident-2
+    __type__: Incident
+    :incident/title: Ransomware activity on db-master-01
+    :incident/asset: asset-2
+    :incident/threat: threat-2
+    :incident/status: contained
+    :incident/severity: 10
+    :incident/assignee: Bob Martinez
+    :incident/timestamp: "2024-01-14T22:15:00Z"
+    :incident/relatedIncidents: [incident-1]
+
+  - :db/id: incident-3
+    __type__: Incident
+    :incident/title: Suspicious outbound traffic from IoT sensor
+    :incident/asset: asset-5
+    :incident/threat: threat-3
+    :incident/status: new
+    :incident/severity: 4
+    :incident/timestamp: "2024-01-15T10:45:00Z"
+    :incident/relatedIncidents: []
+
+  - :db/id: incident-4
+    __type__: Incident
+    :incident/title: Failed login attempts on firewall
+    :incident/asset: asset-3
+    :incident/threat: threat-1
+    :incident/status: resolved
+    :incident/severity: 7
+    :incident/assignee: Carol Kim
+    :incident/timestamp: "2024-01-13T14:20:00Z"
+    :incident/relatedIncidents: []
+
+  - :db/id: incident-5
+    __type__: Incident
+    :incident/title: Phishing email reported by user
+    :incident/asset: asset-4
+    :incident/threat: threat-4
+    :incident/status: false-positive
+    :incident/severity: 2
+    :incident/assignee: David Singh
+    :incident/timestamp: "2024-01-15T09:00:00Z"
+    :incident/relatedIncidents: []
+
+# =============================================================================
+# PROTOCOL - Message definitions
+# =============================================================================
+protocol:
+  name: SOCDashboard
+  version: "1.0.0"
+  messages:
+    receives:
+      channel_connected: {}
+      query:
+        schema:
+          properties:
+            find: { type: array }
+            where: { type: array }
+          required: [find, where]
+      get-dashboard-summary: {}
+      get-entities:
+        schema:
+          properties:
+            type: { type: string }
+      update-entity:
+        schema:
+          properties:
+            entityId: { type: number }
+            updates: { type: object }
+          required: [entityId, updates]
+      create-entity:
+        schema:
+          properties:
+            data: { type: object }
+          required: [data]
+    sends:
+      server-ready: {}
+      query-result: {}
+      dashboard-summary: {}
+      assets: {}
+      threats: {}
+      incidents: {}
+      vulnerabilities: {}
+      update-result: {}
+      create-result: {}
+      error:
+        schema:
+          properties:
+            message: { type: string }
+            code: { type: string }
+          required: [message]
+      data-updated:
+        schema:
+          properties:
+            type: { type: string }
+            payload: { type: object }
+
+# =============================================================================
+# HANDLERS - Declarative message handlers
+# =============================================================================
+handlers:
+  channel_connected:
+    - log: Channel connected
+    - set: { channel: $data.channel }
+    - send: { target: space-actor, message: server-ready }
+
+  query:
+    - query:
+        find: $data.find
+        where: $data.where
+      as: results
+    - return: [query-result, { success: true, results: $results }]
+
+  get-entities:
+    - compute:
+        typeAttr: "{{data.type === 'Asset' ? ':asset/hostname' : data.type === 'Vulnerability' ? ':vulnerability/cveId' : data.type === 'Threat' ? ':threat/name' : data.type === 'Incident' ? ':incident/title' : null}}"
+        responseType: "{{data.type === 'Asset' ? 'assets' : data.type === 'Vulnerability' ? 'vulnerabilities' : data.type === 'Threat' ? 'threats' : data.type === 'Incident' ? 'incidents' : 'entities'}}"
+    - query:
+        find: ['?e', '?attr', '?val']
+        where: "{{[['?e', typeAttr, '?_'], ['?e', '?attr', '?val']]}}"
+      as: rawResults
+    - groupByEntity: $rawResults
+      as: entities
+    - return: ["{{responseType}}", $entities]
+
+  get-dashboard-summary:
+    - query:
+        find: ['?e', '?attr', '?val']
+        where: "{{[['?e', ':asset/hostname', '?_'], ['?e', '?attr', '?val']]}}"
+      as: assetResults
+    - groupByEntity: $assetResults
+      as: assets
+
+    - query:
+        find: ['?e', '?attr', '?val']
+        where: "{{[['?e', ':vulnerability/cveId', '?_'], ['?e', '?attr', '?val']]}}"
+      as: vulnResults
+    - groupByEntity: $vulnResults
+      as: vulnerabilities
+
+    - query:
+        find: ['?e', '?attr', '?val']
+        where: "{{[['?e', ':threat/name', '?_'], ['?e', '?attr', '?val']]}}"
+      as: threatResults
+    - groupByEntity: $threatResults
+      as: threats
+
+    - query:
+        find: ['?e', '?attr', '?val']
+        where: "{{[['?e', ':incident/title', '?_'], ['?e', '?attr', '?val']]}}"
+      as: incidentResults
+    - groupByEntity: $incidentResults
+      as: incidents
+
+    - compute:
+        activeThreats: "{{threats.filter(t => t[':threat/status'] === 'active').length}}"
+        newIncidents: "{{incidents.filter(i => i[':incident/status'] === 'new').length}}"
+        investigatingIncidents: "{{incidents.filter(i => i[':incident/status'] === 'investigating').length}}"
+        threatLevel: "{{Math.min(100, (activeThreats * 20) + (newIncidents * 15) + (investigatingIncidents * 10))}}"
+        criticalIncidents: "{{incidents.filter(i => i[':incident/severity'] >= 9).length}}"
+        highIncidents: "{{incidents.filter(i => i[':incident/severity'] >= 7 && i[':incident/severity'] < 9).length}}"
+        mediumIncidents: "{{incidents.filter(i => i[':incident/severity'] >= 4 && i[':incident/severity'] < 7).length}}"
+        lowIncidents: "{{incidents.filter(i => i[':incident/severity'] < 4).length}}"
+        criticalAssets: "{{assets.filter(a => a[':asset/criticalityLevel'] === 'critical').length}}"
+        highAssets: "{{assets.filter(a => a[':asset/criticalityLevel'] === 'high').length}}"
+        mediumAssets: "{{assets.filter(a => a[':asset/criticalityLevel'] === 'medium').length}}"
+        lowAssets: "{{assets.filter(a => a[':asset/criticalityLevel'] === 'low').length}}"
+        recentIncidents: "{{incidents.sort((a, b) => new Date(b[':incident/timestamp']) - new Date(a[':incident/timestamp'])).slice(0, 5)}}"
+
+    - build:
+        counts:
+          assets: "{{assets.length}}"
+          vulnerabilities: "{{vulnerabilities.length}}"
+          threats: "{{threats.length}}"
+          incidents: "{{incidents.length}}"
+          activeThreats: $activeThreats
+          newIncidents: $newIncidents
+          investigatingIncidents: $investigatingIncidents
+        threatLevel: $threatLevel
+        severityDistribution:
+          critical: $criticalIncidents
+          high: $highIncidents
+          medium: $mediumIncidents
+          low: $lowIncidents
+        assetCriticality:
+          critical: $criticalAssets
+          high: $highAssets
+          medium: $mediumAssets
+          low: $lowAssets
+        recentIncidents: $recentIncidents
+      as: summary
+
+    - return: [dashboard-summary, $summary]
+
+  update-entity:
+    - query:
+        find: ['?attr', '?val']
+        where: "{{[[data.entityId, '?attr', '?val']]}}"
+      as: entityResults
+
+    - if:
+        condition: "{{entityResults.length === 0}}"
+        then:
+          - return: [update-result, { success: false, error: Entity not found, code: NOT_FOUND }]
+
+    - compute:
+        entity: "{{entityResults.reduce((obj, [attr, val]) => { obj[attr] = val; return obj; }, { ':db/id': data.entityId })}}"
+        updatedEntity: "{{Object.assign({}, entity, data.updates)}}"
+
+    - compute:
+        violations: "{{actor.config.validator.validateEntity(updatedEntity)}}"
+
+    - if:
+        condition: "{{violations.length > 0}}"
+        then:
+          - return:
+              - update-result
+              - success: false
+                error: Constraint violation
+                code: CONSTRAINT_VIOLATION
+                violations: "{{violations.map(v => ({ type: v.constraintType, message: v.message, attribute: v.attribute }))}}"
+
+    - compute:
+        _: "{{actor.config.dataStore.updateEntity(data.entityId, data.updates)}}"
+
+    - send: { target: space-actor, message: data-updated, data: { type: entity-updated, payload: { entityId: $data.entityId, updates: $data.updates } } }
+
+    - return: [update-result, { success: true, entityId: $data.entityId }]
+
+  create-entity:
+    - compute:
+        violations: "{{actor.config.validator.validateEntity(data.data)}}"
+
+    - if:
+        condition: "{{violations.length > 0}}"
+        then:
+          - return:
+              - create-result
+              - success: false
+                error: Constraint violation
+                code: CONSTRAINT_VIOLATION
+                violations: "{{violations.map(v => ({ type: v.constraintType, message: v.message, attribute: v.attribute }))}}"
+
+    - compute:
+        result: "{{actor.config.dataStore.createEntity(data.data)}}"
+
+    - send: { target: space-actor, message: data-updated, data: { type: entity-created, payload: { entityId: $result.entityId, data: $data.data } } }
+
+    - return: [create-result, { success: true, entityId: $result.entityId }]

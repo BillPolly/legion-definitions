@@ -1,0 +1,1373 @@
+name: soc-dashboard
+type: root
+domain: frontend
+description: JARVIS-style Cybersecurity Operations Center Dashboard
+
+# Server connection - root connects directly, no separate actor needed
+server: ws://localhost:9224
+
+# JARVIS theme CSS
+styles: |
+  :root {
+    --jarvis-cyan: #00d4ff;
+    --jarvis-dark: #0a0a12;
+    --jarvis-panel: rgba(0, 20, 40, 0.85);
+    --jarvis-border: rgba(0, 212, 255, 0.3);
+    --jarvis-glow: 0 0 20px rgba(0, 212, 255, 0.5);
+    --severity-critical: #ff3366;
+    --severity-high: #ff6633;
+    --severity-medium: #ffcc00;
+    --severity-low: #33cc33;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Rajdhani', 'Segoe UI', sans-serif;
+    background: var(--jarvis-dark);
+    color: #e0e0e0;
+    min-height: 100vh;
+  }
+
+  .soc-dashboard {
+    display: grid;
+    grid-template-columns: 1fr 2fr 1fr;
+    grid-template-rows: auto 1fr 1fr;
+    gap: 16px;
+    padding: 16px;
+    min-height: 100vh;
+  }
+
+  .jarvis-panel {
+    background: var(--jarvis-panel);
+    border: 1px solid var(--jarvis-border);
+    box-shadow: var(--jarvis-glow);
+    backdrop-filter: blur(10px);
+    border-radius: 8px;
+    padding: 16px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .jarvis-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--jarvis-cyan), transparent);
+  }
+
+  .panel-header {
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    color: var(--jarvis-cyan);
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-header::before {
+    content: '//';
+    opacity: 0.5;
+  }
+
+  /* Header spans full width */
+  .dashboard-header {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .dashboard-title {
+    font-size: 28px;
+    font-weight: 300;
+    letter-spacing: 4px;
+    color: var(--jarvis-cyan);
+    text-transform: uppercase;
+  }
+
+  .dashboard-time {
+    font-size: 14px;
+    color: #888;
+    font-family: monospace;
+  }
+
+  /* Threat Radar (Arc Reactor) */
+  .threat-radar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .arc-reactor {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    background: radial-gradient(circle, var(--jarvis-cyan) 0%, transparent 70%);
+    box-shadow: 0 0 40px var(--jarvis-cyan);
+    animation: pulse 2s infinite;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+
+  .threat-level {
+    font-size: 36px;
+    font-weight: bold;
+    color: var(--jarvis-dark);
+    text-shadow: 0 0 10px var(--jarvis-cyan);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 0.8; transform: scale(1); }
+    50% { opacity: 1; transform: scale(1.05); }
+  }
+
+  /* Stats Grid */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-top: 16px;
+  }
+
+  .stat-item {
+    text-align: center;
+    padding: 8px;
+    background: rgba(0, 212, 255, 0.1);
+    border-radius: 4px;
+  }
+
+  .stat-value {
+    font-size: 24px;
+    font-weight: bold;
+    color: var(--jarvis-cyan);
+  }
+
+  .stat-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: #888;
+  }
+
+  /* Asset Grid */
+  .asset-grid {
+    grid-column: 2;
+    grid-row: 2 / 4;
+    overflow: auto;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+
+  .data-table th {
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--jarvis-border);
+    color: var(--jarvis-cyan);
+    font-weight: normal;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 1px;
+  }
+
+  .data-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+  }
+
+  .data-table tr:hover {
+    background: rgba(0, 212, 255, 0.1);
+    cursor: pointer;
+  }
+
+  /* Severity badges */
+  .severity-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+  }
+
+  .severity-critical { background: var(--severity-critical); color: white; }
+  .severity-high { background: var(--severity-high); color: white; }
+  .severity-medium { background: var(--severity-medium); color: black; }
+  .severity-low { background: var(--severity-low); color: white; }
+
+  /* Threat Feed */
+  .threat-feed { grid-column: 3; grid-row: 2; overflow: auto; }
+
+  .threat-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: rgba(0, 20, 40, 0.5);
+    border-left: 3px solid var(--jarvis-cyan);
+    border-radius: 0 4px 4px 0;
+  }
+
+  .threat-name {
+    font-weight: bold;
+    margin-bottom: 4px;
+  }
+
+  .threat-meta {
+    font-size: 11px;
+    color: #888;
+    display: flex;
+    gap: 8px;
+  }
+
+  .threat-status-active { border-left-color: var(--severity-critical); }
+  .threat-status-contained { border-left-color: var(--severity-medium); }
+  .threat-status-remediated { border-left-color: var(--severity-low); }
+
+  /* Incident Timeline */
+  .incident-timeline { grid-column: 3; grid-row: 3; overflow: auto; }
+
+  .incident-item {
+    padding: 12px;
+    margin-bottom: 8px;
+    background: rgba(0, 20, 40, 0.5);
+    border-radius: 4px;
+    position: relative;
+  }
+
+  .incident-title {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .incident-meta {
+    font-size: 11px;
+    color: #888;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* Loading state */
+  .loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--jarvis-cyan);
+  }
+
+  /* Selection state */
+  .data-table tr.selected {
+    background: rgba(0, 212, 255, 0.25);
+    box-shadow: inset 0 0 10px rgba(0, 212, 255, 0.3);
+  }
+
+  .threat-item.selected,
+  .incident-item.selected {
+    background: rgba(0, 212, 255, 0.2);
+    border-color: var(--jarvis-cyan);
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+  }
+
+  /* Detail Panel */
+  .detail-panel {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 350px;
+    max-height: calc(100vh - 100px);
+    background: var(--jarvis-panel);
+    border: 1px solid var(--jarvis-cyan);
+    border-radius: 8px;
+    padding: 20px;
+    box-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+    z-index: 1000;
+    overflow-y: auto;
+  }
+
+  .detail-panel::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, transparent, var(--jarvis-cyan), transparent);
+  }
+
+  .detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--jarvis-border);
+  }
+
+  .detail-title {
+    font-size: 16px;
+    color: var(--jarvis-cyan);
+    text-transform: uppercase;
+    letter-spacing: 2px;
+  }
+
+  .detail-close {
+    background: none;
+    border: 1px solid var(--jarvis-cyan);
+    color: var(--jarvis-cyan);
+    padding: 4px 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+    text-transform: uppercase;
+  }
+
+  .detail-close:hover {
+    background: rgba(0, 212, 255, 0.2);
+  }
+
+  .detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.1);
+  }
+
+  .detail-label {
+    color: #888;
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .detail-value {
+    color: #e0e0e0;
+    font-size: 13px;
+    text-align: right;
+    max-width: 200px;
+    word-break: break-word;
+  }
+
+  /* Chart Panel */
+  .chart-panel {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .chart-select {
+    background: rgba(0, 20, 40, 0.8);
+    border: 1px solid var(--jarvis-cyan);
+    color: var(--jarvis-cyan);
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    cursor: pointer;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .chart-select:hover {
+    background: rgba(0, 212, 255, 0.2);
+  }
+
+  .chart-select:focus {
+    outline: none;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.5);
+  }
+
+  .chart-container {
+    width: 100%;
+    height: 180px;
+    position: relative;
+  }
+
+  .chart-container > div {
+    width: 100%;
+    height: 100%;
+  }
+
+  .chart-container canvas {
+    width: 100% !important;
+    height: 100% !important;
+  }
+
+# Initial state
+state:
+  connected: false
+  loading: true
+  summary: null
+  assets: []
+  threats: []
+  incidents: []
+  selectedEntity: null
+  error: null
+  selectedChart: threats
+  currentTime: ''
+
+# Declarative reducers - handles both UI actions AND server messages
+reducers:
+  # ===== SERVER PROTOCOL HANDLERS =====
+  # These are called when messages arrive from the server
+
+  server-ready:
+    # Server is ready, request initial data
+    operator: sequence
+    operations:
+      - operator: log
+        message: "Server ready, requesting data"
+      - operator: send
+        target: space-actor
+        message: get-dashboard-summary
+        source: space-actor
+      - operator: send
+        target: space-actor
+        message: get-entities
+        data: { type: Asset }
+        source: space-actor
+      - operator: send
+        target: space-actor
+        message: get-entities
+        data: { type: Threat }
+        source: space-actor
+      - operator: send
+        target: space-actor
+        message: get-entities
+        data: { type: Incident }
+        source: space-actor
+
+  dashboard-summary:
+    # Received dashboard summary from server
+    operator: sequence
+    operations:
+      - operator: log
+        message: "Received dashboard summary"
+      - operator: set
+        field: summary
+        value: "{{message.payload}}"
+      - operator: set
+        field: loading
+        value: false
+      - operator: set
+        field: connected
+        value: true
+
+  entities:
+    # Received entities from server - determine type from data shape
+    operator: sequence
+    operations:
+      - operator: log
+        message: "{{`Received ${(message.payload?.length || 0)} entities`}}"
+
+  # Note: entities reducer just logs - actual routing handled by specific reducers below
+  # The server should send typed messages (assets, threats, incidents) not generic "entities"
+
+  assets:
+    operator: sequence
+    operations:
+      - operator: log
+        message: "{{`Received ${(message.payload?.length || 0)} assets`}}"
+      - operator: set
+        field: assets
+        value: "{{message.payload}}"
+
+  threats:
+    operator: sequence
+    operations:
+      - operator: log
+        message: "{{`Received ${(message.payload?.length || 0)} threats`}}"
+      - operator: set
+        field: threats
+        value: "{{message.payload}}"
+
+  incidents:
+    operator: sequence
+    operations:
+      - operator: log
+        message: "{{`Received ${(message.payload?.length || 0)} incidents`}}"
+      - operator: set
+        field: incidents
+        value: "{{message.payload}}"
+
+  error:
+    # Server error
+    operator: sequence
+    operations:
+      - operator: log
+        message: "{{`Server error: ${message.payload?.message || message.payload}`}}"
+      - operator: set
+        field: error
+        value: "{{message.payload?.message || message.payload}}"
+      - operator: set
+        field: loading
+        value: false
+
+  channel_closed:
+    # Connection lost
+    operator: sequence
+    operations:
+      - operator: log
+        message: "Connection closed"
+      - operator: set
+        field: connected
+        value: false
+
+  channel_error:
+    # Connection error
+    operator: sequence
+    operations:
+      - operator: log
+        message: "Connection error"
+      - operator: set
+        field: error
+        value: "Connection error"
+      - operator: set
+        field: connected
+        value: false
+
+  # ===== UI ACTION REDUCERS =====
+  # These are triggered by UI events (clicks, etc.)
+
+  SET_CONNECTED:
+    operator: set
+    field: connected
+    value: "{{message.connected}}"
+
+  SET_LOADING:
+    operator: set
+    field: loading
+    value: "{{message.loading}}"
+
+  SET_SUMMARY:
+    operator: sequence
+    operations:
+      - operator: set
+        field: summary
+        value: "{{message.summary}}"
+      - operator: set
+        field: loading
+        value: false
+
+  SET_ASSETS:
+    operator: set
+    field: assets
+    value: "{{message.assets}}"
+
+  SET_THREATS:
+    operator: set
+    field: threats
+    value: "{{message.threats}}"
+
+  SET_INCIDENTS:
+    operator: set
+    field: incidents
+    value: "{{message.incidents}}"
+
+  SELECT_ENTITY:
+    operator: set
+    field: selectedEntity
+    value: "{{({ type: message.entityType, id: message.entity[':db/id'], data: message.entity })}}"
+
+  CLEAR_SELECTION:
+    operator: set
+    field: selectedEntity
+    value: null
+
+  SET_ERROR:
+    operator: sequence
+    operations:
+      - operator: set
+        field: error
+        value: "{{message.error}}"
+      - operator: set
+        field: loading
+        value: false
+
+  UPDATE_TIME:
+    operator: set
+    field: currentTime
+    value: "{{new Date().toLocaleString()}}"
+
+  CHANGE_CHART:
+    operator: set
+    field: selectedChart
+    value: "{{message.chartType}}"
+
+structure:
+  type: element
+  tag: div
+  class: soc-dashboard
+  children:
+    # Header
+    - type: element
+      tag: header
+      class: dashboard-header jarvis-panel
+      children:
+        - type: element
+          tag: h1
+          class: dashboard-title
+          textContent: JARVIS SOC Dashboard
+
+        - type: element
+          tag: div
+          class: dashboard-time
+          textContent: '{{currentTime}}'
+
+    # Threat Radar (Left Panel)
+    - type: element
+      tag: section
+      class: jarvis-panel threat-radar
+      children:
+        - type: element
+          tag: div
+          class: panel-header
+          textContent: Threat Level
+
+        - type: conditional
+          condition: '{{loading}}'
+          then:
+            type: element
+            tag: div
+            class: loading
+            textContent: Connecting...
+          else:
+            type: element
+            tag: div
+            children:
+              # Arc Reactor
+              - type: element
+                tag: div
+                class: arc-reactor
+                children:
+                  - type: element
+                    tag: span
+                    class: threat-level
+                    textContent: '{{summary.threatLevel}}'
+
+              # Stats Grid
+              - type: element
+                tag: div
+                class: stats-grid
+                children:
+                  - type: element
+                    tag: div
+                    class: stat-item
+                    children:
+                      - type: element
+                        tag: div
+                        class: stat-value
+                        textContent: '{{summary.counts.assets}}'
+                      - type: element
+                        tag: div
+                        class: stat-label
+                        textContent: Assets
+
+                  - type: element
+                    tag: div
+                    class: stat-item
+                    children:
+                      - type: element
+                        tag: div
+                        class: stat-value
+                        textContent: '{{summary.counts.threats}}'
+                      - type: element
+                        tag: div
+                        class: stat-label
+                        textContent: Threats
+
+                  - type: element
+                    tag: div
+                    class: stat-item
+                    children:
+                      - type: element
+                        tag: div
+                        class: stat-value
+                        textContent: '{{summary.counts.incidents}}'
+                      - type: element
+                        tag: div
+                        class: stat-label
+                        textContent: Incidents
+
+                  - type: element
+                    tag: div
+                    class: stat-item
+                    children:
+                      - type: element
+                        tag: div
+                        class: stat-value
+                        textContent: '{{summary.counts.activeThreats}}'
+                      - type: element
+                        tag: div
+                        class: stat-label
+                        textContent: Active
+
+    # Analytics Chart (Left Column, Row 3)
+    - type: element
+      tag: section
+      class: jarvis-panel chart-panel
+      children:
+        - type: element
+          tag: div
+          class: chart-header
+          children:
+            - type: element
+              tag: div
+              class: panel-header
+              attributes:
+                style: "margin-bottom: 0"
+              textContent: Analytics
+
+            - type: element
+              tag: select
+              class: chart-select
+              children:
+                - type: on
+                  event: change
+                  message:
+                    type: CHANGE_CHART
+                    chartType: '{{event.target.value}}'
+                - type: element
+                  tag: option
+                  attributes:
+                    value: threats
+                  textContent: Threats
+                - type: element
+                  tag: option
+                  attributes:
+                    value: incidents
+                  textContent: Incidents
+                - type: element
+                  tag: option
+                  attributes:
+                    value: severity
+                  textContent: Threat Level
+
+        - type: element
+          tag: div
+          class: chart-container
+          children:
+            # Threats chart
+            - type: conditional
+              condition: '{{selectedChart === "threats"}}'
+              then:
+                type: library
+                library: chartjs
+                component: Chart
+                props:
+                  type: line
+                  data:
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                    datasets:
+                      - label: Threats Detected
+                        data: [12, 19, 8, 25, 15, 22, 18]
+                        borderColor: '#00d4ff'
+                        backgroundColor: 'rgba(0, 212, 255, 0.1)'
+                        fill: true
+                        tension: 0.4
+                        pointBackgroundColor: '#00d4ff'
+                        pointBorderColor: '#00d4ff'
+                        pointRadius: 4
+                        pointHoverRadius: 6
+                  options:
+                    responsive: true
+                    maintainAspectRatio: false
+                    animation: false
+                    plugins:
+                      legend:
+                        display: false
+                    scales:
+                      x:
+                        ticks:
+                          color: '#888'
+                        grid:
+                          color: 'rgba(0, 212, 255, 0.1)'
+                      y:
+                        ticks:
+                          color: '#888'
+                        grid:
+                          color: 'rgba(0, 212, 255, 0.1)'
+                        beginAtZero: true
+
+            # Incidents chart
+            - type: conditional
+              condition: '{{selectedChart === "incidents"}}'
+              then:
+                type: library
+                library: chartjs
+                component: Chart
+                props:
+                  type: line
+                  data:
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                    datasets:
+                      - label: Incidents
+                        data: [8, 15, 22, 12, 28, 18, 10]
+                        borderColor: '#ff6633'
+                        backgroundColor: 'rgba(255, 102, 51, 0.1)'
+                        fill: true
+                        tension: 0.4
+                        pointBackgroundColor: '#ff6633'
+                        pointBorderColor: '#ff6633'
+                        pointRadius: 4
+                        pointHoverRadius: 6
+                  options:
+                    responsive: true
+                    maintainAspectRatio: false
+                    animation: false
+                    plugins:
+                      legend:
+                        display: false
+                    scales:
+                      x:
+                        ticks:
+                          color: '#888'
+                        grid:
+                          color: 'rgba(255, 102, 51, 0.1)'
+                      y:
+                        ticks:
+                          color: '#888'
+                        grid:
+                          color: 'rgba(255, 102, 51, 0.1)'
+                        beginAtZero: true
+
+            # Severity chart
+            - type: conditional
+              condition: '{{selectedChart === "severity"}}'
+              then:
+                type: library
+                library: chartjs
+                component: Chart
+                props:
+                  type: line
+                  data:
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+                    datasets:
+                      - label: Threat Level
+                        data: [6.5, 7.2, 5.8, 8.5, 7.0, 7.8, 6.2]
+                        borderColor: '#ff3366'
+                        backgroundColor: 'rgba(255, 51, 102, 0.1)'
+                        fill: true
+                        tension: 0.4
+                        pointBackgroundColor: '#ff3366'
+                        pointBorderColor: '#ff3366'
+                        pointRadius: 4
+                        pointHoverRadius: 6
+                  options:
+                    responsive: true
+                    maintainAspectRatio: false
+                    animation: false
+                    plugins:
+                      legend:
+                        display: false
+                    scales:
+                      x:
+                        ticks:
+                          color: '#888'
+                        grid:
+                          color: 'rgba(255, 51, 102, 0.1)'
+                      y:
+                        ticks:
+                          color: '#888'
+                        grid:
+                          color: 'rgba(255, 51, 102, 0.1)'
+                        min: 0
+                        max: 10
+
+    # Asset Grid (Center Panel)
+    - type: element
+      tag: section
+      class: jarvis-panel asset-grid
+      children:
+        - type: element
+          tag: div
+          class: panel-header
+          textContent: Assets
+
+        - type: conditional
+          condition: '{{loading}}'
+          then:
+            type: element
+            tag: div
+            class: loading
+            textContent: Loading...
+          else:
+            type: element
+            tag: table
+            class: data-table
+            children:
+              - type: element
+                tag: thead
+                children:
+                  - type: element
+                    tag: tr
+                    children:
+                      - type: element
+                        tag: th
+                        textContent: Hostname
+                      - type: element
+                        tag: th
+                        textContent: IP
+                      - type: element
+                        tag: th
+                        textContent: Type
+                      - type: element
+                        tag: th
+                        textContent: Criticality
+                      - type: element
+                        tag: th
+                        textContent: Department
+
+              - type: element
+                tag: tbody
+                children:
+                  - type: repeat
+                    items: '{{assets}}'
+                    key: ':db/id'
+                    itemVar: $asset
+                    template:
+                      type: element
+                      tag: tr
+                      class: '{{selectedEntity && selectedEntity.id === $asset[":db/id"] ? "selected" : ""}}'
+                      children:
+                        - type: on
+                          event: click
+                          message:
+                            type: SELECT_ENTITY
+                            entityType: Asset
+                            entity: '{{$asset}}'
+                        - type: element
+                          tag: td
+                          textContent: '{{$asset[":asset/hostname"]}}'
+                        - type: element
+                          tag: td
+                          textContent: '{{$asset[":asset/ip"]}}'
+                        - type: element
+                          tag: td
+                          textContent: '{{$asset[":asset/type"]}}'
+                        - type: element
+                          tag: td
+                          children:
+                            - type: element
+                              tag: span
+                              class: 'severity-badge severity-{{$asset[":asset/criticalityLevel"]}}'
+                              textContent: '{{$asset[":asset/criticalityLevel"]}}'
+                        - type: element
+                          tag: td
+                          textContent: '{{$asset[":asset/department"]}}'
+
+    # Threat Feed (Right Top)
+    - type: element
+      tag: section
+      class: jarvis-panel threat-feed
+      children:
+        - type: element
+          tag: div
+          class: panel-header
+          textContent: Active Threats
+
+        - type: conditional
+          condition: '{{loading}}'
+          then:
+            type: element
+            tag: div
+            class: loading
+            textContent: Loading...
+          else:
+            type: element
+            tag: div
+            children:
+              - type: repeat
+                items: '{{threats}}'
+                key: ':db/id'
+                itemVar: $threat
+                template:
+                  type: element
+                  tag: div
+                  class: 'threat-item threat-status-{{$threat[":threat/status"]}} {{selectedEntity && selectedEntity.id === $threat[":db/id"] ? "selected" : ""}}'
+                  children:
+                    - type: on
+                      event: click
+                      message:
+                        type: SELECT_ENTITY
+                        entityType: Threat
+                        entity: '{{$threat}}'
+                    - type: element
+                      tag: div
+                      class: threat-name
+                      textContent: '{{$threat[":threat/name"]}}'
+                    - type: element
+                      tag: div
+                      class: threat-meta
+                      children:
+                        - type: element
+                          tag: span
+                          textContent: '{{$threat[":threat/type"]}}'
+                        - type: element
+                          tag: span
+                          class: 'severity-badge severity-{{$threat[":threat/severity"] >= 9 ? "critical" : $threat[":threat/severity"] >= 7 ? "high" : "medium"}}'
+                          textContent: '{{$threat[":threat/severity"]}}'
+                        - type: element
+                          tag: span
+                          textContent: '{{$threat[":threat/status"]}}'
+
+    # Incident Timeline (Right Bottom)
+    - type: element
+      tag: section
+      class: jarvis-panel incident-timeline
+      children:
+        - type: element
+          tag: div
+          class: panel-header
+          textContent: Recent Incidents
+
+        - type: conditional
+          condition: '{{loading}}'
+          then:
+            type: element
+            tag: div
+            class: loading
+            textContent: Loading...
+          else:
+            type: element
+            tag: div
+            children:
+              - type: repeat
+                items: '{{incidents}}'
+                key: ':db/id'
+                itemVar: $incident
+                template:
+                  type: element
+                  tag: div
+                  class: 'incident-item {{selectedEntity && selectedEntity.id === $incident[":db/id"] ? "selected" : ""}}'
+                  children:
+                    - type: on
+                      event: click
+                      message:
+                        type: SELECT_ENTITY
+                        entityType: Incident
+                        entity: '{{$incident}}'
+                    - type: element
+                      tag: div
+                      class: incident-title
+                      textContent: '{{$incident[":incident/title"]}}'
+                    - type: element
+                      tag: div
+                      class: incident-meta
+                      children:
+                        - type: element
+                          tag: span
+                          class: 'severity-badge severity-{{$incident[":incident/severity"] >= 9 ? "critical" : $incident[":incident/severity"] >= 7 ? "high" : $incident[":incident/severity"] >= 4 ? "medium" : "low"}}'
+                          textContent: '{{$incident[":incident/status"]}}'
+                        - type: element
+                          tag: span
+                          textContent: '{{$incident[":incident/timestamp"]}}'
+
+    # Detail Panel (appears when entity selected)
+    - type: conditional
+      condition: '{{selectedEntity !== null}}'
+      then:
+        type: element
+        tag: div
+        class: detail-panel
+        children:
+          # Header with close button
+          - type: element
+            tag: div
+            class: detail-header
+            children:
+              - type: element
+                tag: span
+                class: detail-title
+                textContent: '{{selectedEntity.type}} Details'
+              - type: element
+                tag: button
+                class: detail-close
+                textContent: Close
+                children:
+                  - type: on
+                    event: click
+                    message:
+                      type: CLEAR_SELECTION
+
+          # Asset Details
+          - type: conditional
+            condition: '{{selectedEntity.type === "Asset"}}'
+            then:
+              type: element
+              tag: div
+              class: detail-content
+              children:
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: ID
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":db/id"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Hostname
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":asset/hostname"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: IP Address
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":asset/ip"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Type
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":asset/type"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Criticality
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":asset/criticalityLevel"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Department
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":asset/department"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: OS
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":asset/os"]}}'
+
+          # Threat Details
+          - type: conditional
+            condition: '{{selectedEntity.type === "Threat"}}'
+            then:
+              type: element
+              tag: div
+              class: detail-content
+              children:
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: ID
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":db/id"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Name
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":threat/name"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Type
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":threat/type"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Severity
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":threat/severity"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Status
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":threat/status"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Source
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":threat/source"]}}'
+
+          # Incident Details
+          - type: conditional
+            condition: '{{selectedEntity.type === "Incident"}}'
+            then:
+              type: element
+              tag: div
+              class: detail-content
+              children:
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: ID
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":db/id"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Title
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":incident/title"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Status
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":incident/status"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Severity
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":incident/severity"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Timestamp
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":incident/timestamp"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Asset
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":incident/asset"]}}'
+                - type: element
+                  tag: div
+                  class: detail-row
+                  children:
+                    - type: element
+                      tag: span
+                      class: detail-label
+                      textContent: Threat
+                    - type: element
+                      tag: span
+                      class: detail-value
+                      textContent: '{{selectedEntity.data[":incident/threat"]}}'
