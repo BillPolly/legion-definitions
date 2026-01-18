@@ -4,6 +4,25 @@ type: agent
 version: 1
 purpose: Review and fix code changes with iterative improvement loop
 
+# Semantic search metadata
+search:
+  keywords:
+    - code review
+    - pull request
+    - git diff
+    - quality assurance
+    - automated review
+  capabilities:
+    - analyze code changes
+    - suggest improvements
+    - create pull requests
+    - iterative fixing
+  useCases:
+    - review staged changes before commit
+    - automatically fix code issues
+    - generate pull request descriptions
+    - ensure code quality
+
 tools:
   - GitDiffTool
   - PRCreatorTool

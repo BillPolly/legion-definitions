@@ -6,6 +6,26 @@ purpose: Investigate and fix bugs in JavaScript projects by analyzing test failu
 createdAt: "2024-11-26T00:00:00Z"
 createdBy: human
 
+# Semantic search metadata
+search:
+  keywords:
+    - bug fixing
+    - debugging
+    - test failures
+    - jest
+    - javascript
+    - automated repair
+  capabilities:
+    - run tests
+    - diagnose failures
+    - generate code fixes
+    - verify repairs
+  useCases:
+    - fix failing unit tests
+    - debug javascript errors
+    - automatically repair broken code
+    - investigate test regressions
+
 behaviorTree:
   type: sequence
   description: Main bug investigation flow

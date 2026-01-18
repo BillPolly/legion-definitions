@@ -5,6 +5,27 @@ version: 1
 purpose: Definitional version of claude-cli that uses LLM with tools to complete coding tasks
 description: A YAML-defined agent that replicates claude-cli's core conversation loop. Takes a user request, calls LLM with available tools, executes tool calls, and returns the final response.
 
+# Semantic search metadata
+search:
+  keywords:
+    - coding assistant
+    - LLM tools
+    - file operations
+    - code generation
+    - conversational AI
+  capabilities:
+    - read files
+    - write code
+    - execute bash commands
+    - search codebase
+    - web search
+  useCases:
+    - help with coding tasks
+    - answer programming questions
+    - generate code from descriptions
+    - explore and modify codebases
+    - automate development workflows
+
 tags:
   - coding
   - tools
