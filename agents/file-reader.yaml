@@ -1,0 +1,49 @@
+id: "agent:file-reader"
+name: FileReader
+type: agent
+version: 1
+purpose: Simple agent that reads a file and returns its contents
+description: A minimal agent demonstrating file reading capability. Uses the standard Read tool.
+
+# Semantic search metadata
+search:
+  keywords:
+    - read file
+    - file contents
+    - view file
+    - cat file
+  capabilities:
+    - read files
+    - display content
+  useCases:
+    - read a specific file
+    - view file contents
+    - inspect source code
+
+tags:
+  - file
+  - read
+  - simple
+
+handles:
+  - claudeTools
+
+tools:
+  - Read
+
+behaviorTree:
+  type: sequence
+  name: Read File Sequence
+  children:
+    - type: action
+      name: Read the file
+      tool: Read
+      inputQuery:
+        file_path: "{{input.filePath}}"
+      outputUpdate:
+        fileContent: "{{result}}"
+
+    - type: succeed
+      outputUpdate:
+        status: success
+        content: "{{fileContent}}"
