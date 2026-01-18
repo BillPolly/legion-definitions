@@ -1,8 +1,9 @@
 name: legion-definitions
-description: Legion component, agent, and actor definitions
+description: Legion component, agent, actor, and ontology definitions
 version: "1.0.0"
 
 collections:
   - components
   - agents
   - actors
+  - ontology

@@ -1,0 +1,126 @@
+name: foundation-relations
+type: relations
+version: "1.0.0"
+description: Core semantic relations for Legion ontologies
+
+imports:
+  - foundation
+
+search:
+  keywords: [relations, semantic, ABOUT, describes, part-of, instance-of]
+  capabilities: [aboutness, mereology, classification, participation]
+
+relations:
+  # ABOUT hierarchy - artifacts to reality
+  ABOUT:
+    description: Generic aboutness relation. Source artifact is about target entity.
+    domain: Artifact
+    range: Entity
+
+  DESCRIBES:
+    parent: ABOUT
+    description: Source artifact describes the state of target entity.
+    domain: DescriptiveArtifact
+    range: Entity
+    attributes:
+      capturedAt:
+        type: datetime
+        description: When the description was captured
+      accuracy:
+        type: float
+        description: Estimated accuracy of the description
+
+  PRESCRIBES:
+    parent: ABOUT
+    description: Source directive prescribes behavior for target entity.
+    domain: DirectiveArtifact
+    range: Entity
+    attributes:
+      effectiveFrom:
+        type: datetime
+        description: When the directive becomes effective
+      effectiveUntil:
+        type: datetime
+        description: When the directive expires
+
+  DESIGNATES:
+    parent: ABOUT
+    description: Source identifier designates target entity.
+    domain: DesignativeArtifact
+    range: Entity
+    attributes:
+      isPrimary:
+        type: boolean
+        description: Whether this is the primary identifier
+
+  DENOTES:
+    parent: ABOUT
+    description: Source lexical item denotes target concept.
+    domain: LexicalArtifact
+    range: Entity
+    attributes:
+      confidence:
+        type: float
+        description: Confidence in the denotation
+      context:
+        type: string
+        description: Context for the denotation
+
+  FORMALIZES:
+    parent: ABOUT
+    description: Source formal predicate formalizes target concept.
+    domain: FormalArtifact
+    range: Entity
+    attributes:
+      tool:
+        type: string
+        description: Tool used for formalization
+
+  # Structural relations
+  INSTANCE_OF:
+    description: Source is an instance of target type.
+    domain: Entity
+    range: Entity
+
+  SUBTYPE_OF:
+    description: Source type is a subtype of target type.
+    domain: Entity
+    range: Entity
+
+  PART_OF:
+    description: Source is a part of target.
+    domain: Entity
+    range: Entity
+    inverse: HAS_PART
+
+  HAS_PART:
+    description: Source has target as a part.
+    domain: Entity
+    range: Entity
+    inverse: PART_OF
+
+  # Process relations
+  PARTICIPATES_IN:
+    description: Source participates in target process.
+    domain: Continuant
+    range: Process
+
+  HAS_INPUT:
+    description: Source process has target as input.
+    domain: Process
+    range: Entity
+
+  HAS_OUTPUT:
+    description: Source process has target as output.
+    domain: Process
+    range: Entity
+
+  HAS_ROLE:
+    description: Source has target role.
+    domain: IndependentContinuant
+    range: Role
+
+  GOVERNED_BY:
+    description: Source process is governed by target directive.
+    domain: Process
+    range: DirectiveArtifact

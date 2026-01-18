@@ -1,0 +1,236 @@
+name: soc-seed-data
+type: instances
+version: "1.0.0"
+ontology: soc-ontology
+description: Initial SOC data for testing and demonstration
+
+search:
+  keywords: [seed data, test data, SOC examples, security incidents]
+  capabilities: [testing, demonstration, sample data]
+
+instances:
+  # Assets
+  asset-web-server-01:
+    type: Server
+    attributes:
+      name: Web Server 1
+      hostname: web-01.corp.local
+      ip: 10.0.1.10
+      assetType: server
+      criticality: high
+      owner: webops-team
+      os: Ubuntu 22.04 LTS
+      services:
+        - nginx
+        - nodejs
+
+  asset-web-server-02:
+    type: Server
+    attributes:
+      name: Web Server 2
+      hostname: web-02.corp.local
+      ip: 10.0.1.11
+      assetType: server
+      criticality: high
+      owner: webops-team
+      os: Ubuntu 22.04 LTS
+      services:
+        - nginx
+        - nodejs
+    relations:
+      CONNECTED_TO:
+        - asset-web-server-01
+
+  asset-db-server:
+    type: Server
+    attributes:
+      name: Database Server
+      hostname: db-01.corp.local
+      ip: 10.0.1.20
+      assetType: database
+      criticality: critical
+      owner: dba-team
+      os: RHEL 8.6
+      services:
+        - postgresql
+        - pgbouncer
+    relations:
+      CONNECTED_TO:
+        - asset-web-server-01
+        - asset-web-server-02
+
+  asset-firewall:
+    type: NetworkDevice
+    attributes:
+      name: Core Firewall
+      hostname: fw-01.corp.local
+      ip: 10.0.0.1
+      assetType: network
+      criticality: critical
+      owner: netops-team
+      deviceType: firewall
+
+  asset-workstation-analyst:
+    type: Workstation
+    attributes:
+      name: Analyst Workstation
+      hostname: ws-analyst-01.corp.local
+      ip: 10.0.2.50
+      assetType: workstation
+      criticality: medium
+      owner: soc-team
+      assignedUser: jsmith
+
+  # Vulnerabilities
+  vuln-log4j:
+    type: Vulnerability
+    attributes:
+      name: Log4Shell
+      cveId: CVE-2021-44228
+      cvssScore: 10.0
+      severity: critical
+      patchAvailable: true
+
+  vuln-spring4shell:
+    type: Vulnerability
+    attributes:
+      name: Spring4Shell
+      cveId: CVE-2022-22965
+      cvssScore: 9.8
+      severity: critical
+      patchAvailable: true
+    relations:
+      FOUND_IN:
+        - asset-web-server-01
+
+  # Threats
+  threat-cobalt-strike:
+    type: Malware
+    attributes:
+      name: Cobalt Strike Beacon
+      severity: high
+      category: malware
+      indicators:
+        - beacon traffic pattern
+        - C2 communication on port 443
+        - sleep jitter behavior
+      mitreId: T1071.001
+      confidence: 0.85
+      malwareFamily: CobaltStrike
+      hash: a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6
+    relations:
+      TARGETS:
+        - asset-web-server-01
+      EXPLOITS:
+        - vuln-spring4shell
+
+  threat-credential-theft:
+    type: Intrusion
+    attributes:
+      name: Credential Harvesting Attempt
+      severity: medium
+      category: credential-access
+      mitreId: T1003
+      confidence: 0.72
+      sourceIp: 185.220.101.42
+      technique: memory-scraping
+
+  threat-lateral-movement:
+    type: Intrusion
+    attributes:
+      name: Lateral Movement via SMB
+      severity: high
+      category: lateral-movement
+      mitreId: T1021.002
+      confidence: 0.91
+      sourceIp: 10.0.1.10
+      technique: smb-admin-shares
+    relations:
+      TARGETS:
+        - asset-db-server
+
+  # Threat Actors
+  actor-apt29:
+    type: ThreatActor
+    attributes:
+      name: APT29 / Cozy Bear
+      actorType: nation-state
+      motivation: espionage
+      sophistication: advanced
+
+  # Incidents
+  incident-001:
+    type: Incident
+    attributes:
+      name: Suspected C2 Activity
+      severity: high
+      status: investigating
+      detectedAt: 2024-01-15T10:30:00Z
+      assignedTo: jsmith
+      priority: 8
+    relations:
+      CAUSED_BY:
+        - threat-cobalt-strike
+      AFFECTS:
+        - asset-web-server-01
+
+  incident-002:
+    type: Incident
+    attributes:
+      name: Unauthorized Database Access
+      severity: critical
+      status: contained
+      detectedAt: 2024-01-15T14:45:00Z
+      assignedTo: mjohnson
+      priority: 10
+    relations:
+      CAUSED_BY:
+        - threat-lateral-movement
+      AFFECTS:
+        - asset-db-server
+
+  incident-003:
+    type: Incident
+    attributes:
+      name: Phishing Campaign Detected
+      severity: medium
+      status: triaging
+      detectedAt: 2024-01-16T09:15:00Z
+      priority: 5
+
+  # Alerts
+  alert-edr-001:
+    type: Alert
+    attributes:
+      name: Suspicious Process Execution
+      alertType: edr
+      source: CrowdStrike Falcon
+      severity: high
+      falsePositive: false
+    relations:
+      TRIGGERED_BY:
+        - threat-cobalt-strike
+
+  alert-siem-001:
+    type: Alert
+    attributes:
+      name: Multiple Failed Logins
+      alertType: siem
+      source: Splunk
+      severity: medium
+      falsePositive: false
+    relations:
+      TRIGGERED_BY:
+        - threat-credential-theft
+
+  alert-ids-001:
+    type: Alert
+    attributes:
+      name: SMB Traffic Anomaly
+      alertType: ids
+      source: Suricata
+      severity: high
+      falsePositive: false
+    relations:
+      TRIGGERED_BY:
+        - threat-lateral-movement

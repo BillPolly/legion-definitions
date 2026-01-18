@@ -1,0 +1,182 @@
+name: foundation
+type: ontology
+version: "1.0.0"
+description: BFO-inspired foundation types for Legion
+
+search:
+  keywords: [BFO, foundation, upper ontology, entity types, continuant, occurrent]
+  capabilities: [type hierarchy, subsumption, temporal reasoning]
+
+concepts:
+  Entity:
+    kind: entity
+    description: The root of all types. Everything is an Entity.
+    attributes:
+      name:
+        type: string
+        description: Human-readable name
+      uri:
+        type: string
+        description: Unique identifier URI
+
+  # Continuants - entities that endure through time
+  Continuant:
+    kind: entity
+    parent: Entity
+    description: An entity that endures through time while maintaining identity.
+
+  IndependentContinuant:
+    kind: entity
+    parent: Continuant
+    description: A continuant that can exist on its own without depending on other entities.
+
+  MaterialEntity:
+    kind: entity
+    parent: IndependentContinuant
+    description: A physical entity with spatial extent and mass.
+    attributes:
+      location:
+        type: string
+        description: Physical location
+
+  ImmaterialEntity:
+    kind: entity
+    parent: IndependentContinuant
+    description: A non-physical entity like an organization or role.
+
+  DependentContinuant:
+    kind: entity
+    parent: Continuant
+    description: A continuant that depends on other entities for its existence.
+
+  Quality:
+    kind: entity
+    parent: DependentContinuant
+    description: An intrinsic attribute or property (e.g., color, mass, size).
+
+  Disposition:
+    kind: entity
+    parent: DependentContinuant
+    description: A potential or capability (e.g., fragility, solubility).
+
+  Role:
+    kind: entity
+    parent: DependentContinuant
+    description: A relational entity that depends on context (e.g., employee, customer).
+
+  # Occurrents - entities that unfold in time
+  Occurrent:
+    kind: entity
+    parent: Entity
+    description: A temporal entity that unfolds over time.
+
+  Process:
+    kind: entity
+    parent: Occurrent
+    description: A temporal entity with distinct phases or stages.
+    attributes:
+      status:
+        type: string
+        description: Current process status
+      startTime:
+        type: datetime
+        description: When the process started
+      endTime:
+        type: datetime
+        description: When the process ended
+
+  PlannedProcess:
+    kind: entity
+    parent: Process
+    description: A process that is intentionally executed according to a plan.
+    attributes:
+      planId:
+        type: string
+        description: Reference to the plan being executed
+
+  NaturalProcess:
+    kind: entity
+    parent: Process
+    description: A process that occurs without intention.
+
+  TemporalRegion:
+    kind: entity
+    parent: Occurrent
+    description: A time interval or instant.
+    attributes:
+      duration:
+        type: string
+        description: Duration of the temporal region
+
+  # Artifacts - created by agents
+  Artifact:
+    kind: entity
+    parent: Entity
+    description: An entity created by an agent to represent something.
+    attributes:
+      createdBy:
+        type: string
+        description: The agent that created this artifact
+      createdAt:
+        type: datetime
+        description: When the artifact was created
+
+  InformationArtifact:
+    kind: entity
+    parent: Artifact
+    description: An artifact that carries information.
+    attributes:
+      contentType:
+        type: string
+        description: The type of content (e.g., text/plain, application/json)
+
+  DescriptiveArtifact:
+    kind: entity
+    parent: InformationArtifact
+    description: An artifact that describes reality.
+    attributes:
+      data:
+        type: string
+        description: The descriptive content
+
+  DirectiveArtifact:
+    kind: entity
+    parent: InformationArtifact
+    description: An artifact that prescribes behavior.
+    attributes:
+      content:
+        type: string
+        description: The directive content
+
+  DesignativeArtifact:
+    kind: entity
+    parent: InformationArtifact
+    description: An artifact that names or identifies something.
+    attributes:
+      designatedId:
+        type: string
+        description: The identifier being designated
+
+  LexicalArtifact:
+    kind: entity
+    parent: InformationArtifact
+    description: An artifact that represents words or senses.
+    attributes:
+      definition:
+        type: string
+        description: The definition
+      synonyms:
+        type: array
+        description: Alternative terms
+
+  FormalArtifact:
+    kind: entity
+    parent: Artifact
+    description: An artifact with formal/logical structure.
+    attributes:
+      formalLanguage:
+        type: string
+        description: The formal language used
+      syntax:
+        type: string
+        description: The syntactic representation
