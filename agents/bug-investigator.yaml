@@ -1,0 +1,223 @@
+id: "agent:bug-investigator"
+name: BugInvestigator
+type: agent
+version: 1
+purpose: Investigate and fix bugs in JavaScript projects by analyzing test failures, diagnosing root causes, and generating fixes
+createdAt: "2024-11-26T00:00:00Z"
+createdBy: human
+
+behaviorTree:
+  type: sequence
+  description: Main bug investigation flow
+  children:
+    - type: action
+      description: Run initial tests to find failures
+      tool: jestRunner
+      inputQuery:
+        testPath: "{{input.testPath}}"
+      outputUpdate:
+        testResults: "{{result}}"
+
+    - type: selector
+      description: Check if there are failures to fix
+      children:
+        - type: condition
+          description: All tests pass - nothing to do
+          check: "testResults.summary.failed === 0"
+          then:
+            type: succeed
+            outputUpdate:
+              status: all_tests_pass
+              message: All tests passed, no bugs to fix
+
+        - type: sequence
+          description: Fix bugs and verify
+          children:
+            - type: prompt
+              description: Diagnose test failures
+              promptRef: diagnose
+              inputQuery:
+                failures: "{{testResults.failures}}"
+              outputUpdate:
+                diagnosis: "{{result}}"
+
+            - type: action
+              description: Read affected source files
+              tool: fileReader
+              inputQuery:
+                paths: "{{diagnosis.affectedFiles}}"
+              outputUpdate:
+                sourceCode: "{{result}}"
+
+            - type: prompt
+              description: Generate fix for the bug
+              promptRef: generateFix
+              inputQuery:
+                diagnosis: "{{diagnosis}}"
+                sourceCode: "{{sourceCode}}"
+                failures: "{{testResults.failures}}"
+              outputUpdate:
+                fixes: "{{result}}"
+
+            - type: action
+              description: Apply fixes to source files
+              tool: fileWriter
+              inputQuery:
+                changes: "{{fixes.changes}}"
+
+            - type: action
+              description: Verify fixes by running tests again
+              tool: jestRunner
+              inputQuery:
+                testPath: "{{input.testPath}}"
+              outputUpdate:
+                verifyResults: "{{result}}"
+
+            - type: condition
+              description: Check if all tests pass after fix
+              check: "verifyResults.summary.failed === 0"
+              then:
+                type: succeed
+                outputUpdate:
+                  status: success
+                  message: All bugs fixed
+                  fixesApplied: "{{fixes}}"
+              else:
+                type: fail
+                reason: Some tests still failing after fix attempt
+
+prompts:
+  diagnose:
+    version: 1
+    systemMessage: You are an expert software engineer specializing in debugging JavaScript applications.
+    template: |
+      Analyze the following test failures and diagnose the root cause.
+
+      ## Test Failures
+      {{#each failures}}
+      ### {{name}}
+      - File: {{filePath}}
+      - Error: {{errorMessage}}
+      {{#if expected}}- Expected: {{expected}}{{/if}}
+      {{#if actual}}- Actual: {{actual}}{{/if}}
+      {{/each}}
+
+      Provide your diagnosis in the following JSON format:
+      ```json
+      {
+        "errorType": "assertion|runtime|syntax",
+        "rootCause": "Brief explanation of the root cause",
+        "affectedFiles": ["src/file.js"],
+        "fixStrategy": "Description of how to fix the issue",
+        "confidence": 0.0-1.0
+      }
+      ```
+    outputFormat: json
+    outputSchema:
+      type: object
+      properties:
+        errorType:
+          type: string
+          enum: [assertion, runtime, syntax]
+        rootCause:
+          type: string
+        affectedFiles:
+          type: array
+          items:
+            type: string
+        fixStrategy:
+          type: string
+        confidence:
+          type: number
+          minimum: 0
+          maximum: 1
+      required: [errorType, rootCause, affectedFiles, fixStrategy]
+
+  generateFix:
+    version: 1
+    systemMessage: You are an expert software engineer specializing in fixing bugs in JavaScript code.
+    template: |
+      Based on the diagnosis and source code, generate the necessary fixes.
+
+      ## Diagnosis
+      - Error Type: {{diagnosis.errorType}}
+      - Root Cause: {{diagnosis.rootCause}}
+      - Fix Strategy: {{diagnosis.fixStrategy}}
+
+      ## Source Code
+      {{#each sourceCode}}
+      ### {{path}}
+      ```javascript
+      {{content}}
+      ```
+      {{/each}}
+
+      ## Test Failures
+      {{#each failures}}
+      - {{name}}: {{errorMessage}}
+      {{/each}}
+
+      Provide the fixes in the following JSON format:
+      ```json
+      {
+        "changes": [
+          {
+            "file": "src/file.js",
+            "description": "What this change does",
+            "oldCode": "exact code to replace",
+            "newCode": "replacement code"
+          }
+        ],
+        "explanation": "Why these changes fix the bug"
+      }
+      ```
+
+      IMPORTANT: The oldCode must be an EXACT match of the code in the source file.
+    outputFormat: json
+    outputSchema:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            type: object
+            properties:
+              file:
+                type: string
+              description:
+                type: string
+              oldCode:
+                type: string
+              newCode:
+                type: string
+            required: [file, oldCode, newCode]
+        explanation:
+          type: string
+      required: [changes]
+
+handles:
+  - prompting
+  - filesystem
+  - logging
+
+tools:
+  - jestRunner
+  - fileReader
+  - fileWriter
+
+successCriteria:
+  - metric: verifyResults.summary.failed
+    threshold: 0
+    operator: eq
+
+testFixtures:
+  - name: buggy-calculator
+    path: fixtures/buggy-calculator
+    expectedOutcome: success
+
+tags:
+  - debugging
+  - testing
+  - javascript
+  - jest
+  - bug-fixing

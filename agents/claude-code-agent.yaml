@@ -1,0 +1,211 @@
+id: "agent:claude-code-agent"
+name: ClaudeCodeAgent
+type: agent
+version: 1
+purpose: Definitional version of claude-cli that uses LLM with tools to complete coding tasks
+description: A YAML-defined agent that replicates claude-cli's core conversation loop. Takes a user request, calls LLM with available tools, executes tool calls, and returns the final response.
+
+tags:
+  - coding
+  - tools
+  - claude-cli
+
+handles:
+  - prompting
+  - claudeTools
+
+tools:
+  - Read
+  - Write
+  - Edit
+  - Bash
+  - Glob
+  - Grep
+  - WebFetch
+  - WebSearch
+  - GetToolSchemas
+
+behaviorTree:
+  type: sequence
+  name: Claude Code Conversation
+  children:
+    - type: action
+      name: Get Tool Schemas
+      tool: GetToolSchemas
+      inputQuery:
+        include:
+          - Read
+          - Write
+          - Edit
+          - Bash
+          - Glob
+          - Grep
+          - WebFetch
+          - WebSearch
+      outputUpdate:
+        toolSchemas: "{{result}}"
+
+    - type: set
+      name: Initialize Conversation
+      blackboard:
+        messages: []
+        toolResults: []
+        turnCount: 0
+        maxTurns: 10
+        ended: false
+
+    - type: repeat
+      name: Conversation Loop
+      until: "{{ended}}"
+      maxIterations: 10
+      child:
+        type: sequence
+        name: Process Turn
+        children:
+          - type: prompt
+            name: Call LLM with Tools
+            promptRef: llmWithTools
+            inputQuery:
+              userRequest: "{{input.request}}"
+              messages: "{{messages}}"
+              projectContext: "{{input.projectContext}}"
+              toolSchemas: "{{toolSchemas}}"
+            outputUpdate:
+              response: "{{result}}"
+
+          - type: set
+            name: Increment Turn
+            blackboard:
+              turnCount: "{{turnCount + 1}}"
+
+          - type: condition
+            name: Check Stop Reason
+            condition: "{{response.stop_reason === 'tool_use'}}"
+            then:
+              type: sequence
+              name: Execute Tools
+              children:
+                - type: forEach
+                  name: Execute Each Tool
+                  items: "{{response.tool_calls}}"
+                  as: toolCall
+                  child:
+                    type: action
+                    name: Execute Tool
+                    tool: "{{toolCall.name}}"
+                    inputQuery: "{{toolCall.input || toolCall.arguments}}"
+                    outputUpdate:
+                      lastToolResult: "{{result}}"
+
+                - type: script
+                  name: Append Tool Results
+                  code: "messages.push({ role: 'assistant', content: response.content }); messages.push({ role: 'user', content: JSON.stringify(toolResults) });"
+            else:
+              type: set
+              name: End Conversation
+              blackboard:
+                ended: true
+                finalResponse: "{{response.content}}"
+
+          - type: condition
+            name: Check Max Turns
+            condition: "{{turnCount >= maxTurns}}"
+            then:
+              type: set
+              name: Force End
+              blackboard:
+                ended: true
+                error: Max turns exceeded
+
+prompts:
+  llmWithTools:
+    version: 1
+    systemMessage: |
+      You are Claude Code, a coding assistant that helps with software development tasks. You have access to various tools for reading files, writing code, executing commands, and searching.
+
+      When given a task:
+      1. Think through the approach
+      2. Use tools as needed to accomplish the task
+      3. Provide clear explanations of what you're doing
+    template: |
+      ## User Request
+      {{userRequest}}
+
+      {{#if projectContext}}
+      ## Project Context
+      {{projectContext}}
+      {{/if}}
+
+      {{#if messages.length}}
+      ## Conversation History
+      {{#each messages}}
+      {{role}}: {{content}}
+      {{/each}}
+      {{/if}}
+
+      ## Available Tools
+      {{#each toolSchemas}}
+      ### {{name}}
+      {{description}}
+      Input: {{json input_schema}}
+      {{/each}}
+
+      Please help with this request. Use the available tools as needed by returning tool calls in your response.
+    outputFormat: json
+    outputSchema:
+      type: object
+      properties:
+        stop_reason:
+          type: string
+          enum: [end_turn, tool_use]
+          description: Whether to end the turn or use tools
+        content:
+          type: string
+          description: Response text
+        tool_calls:
+          type: array
+          description: Array of tool calls to make
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              input:
+                type: object
+      required: [stop_reason]
+    examples:
+      - input:
+          userRequest: "What is 2 + 2?"
+          projectContext: ""
+          messages: []
+          toolSchemas: []
+        output:
+          stop_reason: end_turn
+          content: "2 + 2 = 4"
+      - input:
+          userRequest: "Read the file package.json"
+          projectContext: "Node.js project"
+          messages: []
+          toolSchemas:
+            - name: Read
+              description: Read files
+              input_schema:
+                type: object
+        output:
+          stop_reason: tool_use
+          content: "I'll read the package.json file for you."
+          tool_calls:
+            - name: Read
+              input:
+                file_path: package.json
+
+successCriteria:
+  - metric: response.finalResponse
+    condition: exists
+    description: Agent must produce a final response
+
+testFixtures:
+  - name: simple-read
+    input:
+      request: Read the package.json file
+    expectedOutcome: success

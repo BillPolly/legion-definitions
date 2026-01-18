@@ -1,0 +1,86 @@
+id: "agent:code-review"
+name: CodeReview
+type: agent
+version: 1
+purpose: Review and fix code changes with iterative improvement loop
+
+tools:
+  - GitDiffTool
+  - PRCreatorTool
+
+subAgents:
+  - agent:review-fix-loop
+  - agent:pr-generator
+
+behaviorTree:
+  type: sequence
+  description: Main code review flow
+  children:
+    - type: action
+      description: Get diff of staged changes
+      tool: GitDiffTool
+      inputQuery:
+        staged: "{{input.staged}}"
+        branch: "{{input.branch}}"
+        base: "{{input.base}}"
+      outputUpdate:
+        diff: "{{result.diff}}"
+
+    - type: condition
+      description: Check if there are changes
+      check: "diff && diff.length > 0"
+      else:
+        type: succeed
+        output:
+          status: NO_CHANGES
+
+    - type: subagent
+      description: Run review-fix loop
+      agentRef: agent:review-fix-loop
+      inputQuery:
+        diff: "{{diff}}"
+        maxIterations: 6
+        contextRadius: 25
+      outputUpdate:
+        loopResult: "{{result}}"
+
+    - type: selector
+      description: Handle loop outcome
+      children:
+        - type: condition
+          check: "loopResult.result.status === 'READY'"
+          then:
+            type: selector
+            children:
+              - type: condition
+                check: "!input.createPR"
+                then:
+                  type: succeed
+                  output:
+                    status: READY
+                    history: "{{loopResult.history}}"
+              - type: sequence
+                description: Create PR
+                children:
+                  - type: subagent
+                    agentRef: agent:pr-generator
+                    inputQuery:
+                      diff: "{{diff}}"
+                      history: "{{loopResult.history}}"
+                    outputUpdate:
+                      pr: "{{result}}"
+                  - type: action
+                    tool: PRCreatorTool
+                    inputQuery:
+                      title: "{{pr.title}}"
+                      body: "{{pr.body}}"
+                      branch: "{{input.prBranch || 'ai/auto-review'}}"
+                    outputUpdate:
+                      prUrl: "{{result.url}}"
+        - type: fail
+          reason: "Review loop failed: {{loopResult.result.status}}"
+
+tags:
+  - code-review
+  - pull-request
+  - git
